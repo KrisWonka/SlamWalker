@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="slamwalker">
+
+  <!-- ============ Parameters ============ -->
+  <xacro:arg name="wheel_base"    default="0.26"/>
+  <xacro:arg name="wheel_radius"  default="0.03575"/>
+  <xacro:arg name="body_length"   default="0.52"/>
+  <xacro:arg name="body_width"    default="0.356"/>
+  <xacro:arg name="body_height"   default="0.08"/>
+  <!-- Lidar mount: XYZ offset from base_link center -->
+  <xacro:arg name="lidar_x"       default="0.1"/>
+  <xacro:arg name="lidar_y"       default="0.0"/>
+  <xacro:arg name="lidar_z"       default="0.12"/>
+
+  <!-- ============ base_footprint (ground projection) ============ -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 $(arg wheel_radius)" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ============ base_link (chassis center) ============ -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="$(arg body_length) $(arg body_width) $(arg body_height)"/>
+      </geometry>
+      <origin xyz="0 0 $(arg body_height)" rpy="0 0 0"/>
+      <material name="grey">
+        <color rgba="0.5 0.5 0.5 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="$(arg body_length) $(arg body_width) $(arg body_height)"/>
+      </geometry>
+      <origin xyz="0 0 $(arg body_height)" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="1.5"/>
+      <inertia ixx="0.005" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.008"/>
+    </inertial>
+  </link>
+
+  <!-- ============ Left Wheel ============ -->
+  <link name="left_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="$(arg wheel_radius)" length="0.02"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_wheel"/>
+    <origin xyz="0 ${$(arg wheel_base)/2.0} 0" rpy="${-pi/2.0} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <!-- ============ Right Wheel ============ -->
+  <link name="right_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="$(arg wheel_radius)" length="0.02"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="right_wheel"/>
+    <origin xyz="0 ${-$(arg wheel_base)/2.0} 0" rpy="${-pi/2.0} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <!-- ============ Laser (LDLiDAR) ============ -->
+  <link name="base_laser">
+    <visual>
+      <geometry>
+        <cylinder radius="0.03" length="0.04"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.0 0.0 0.8 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_laser"/>
+    <origin xyz="$(arg lidar_x) $(arg lidar_y) $(arg lidar_z)" rpy="0 0 0"/>
+  </joint>
+
+</robot>

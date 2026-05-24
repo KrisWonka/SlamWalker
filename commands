@@ -1,0 +1,8 @@
+# build map
+ros2 launch slamwalker_bringup slamwalker_slam.launch.py
+# terminal control
+ros2 run slamwalker_bridge teleop
+# save map
+ros2 run nav2_map_server map_saver_cli -f ~/walker_ws/maps/my_map
+# navigation mode
+ros2 launch slamwalker_bringup slamwalker_nav.launch.py map:=~/walker_ws/maps/my_map.yaml

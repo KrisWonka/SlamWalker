@@ -1,0 +1,215 @@
+# Nav2 params for Phase 1 (online SLAM + frontier exploration).
+# Differences vs nav2_real.yaml:
+#   - no static_layer in global_costmap (map is built live by slam_toolbox)
+#   - map_server disabled (slam_toolbox publishes /map)
+#   - amcl disabled (slam_toolbox provides map->odom)
+#   - controller tolerances slightly looser (online map is noisier)
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: map
+    robot_base_frame: base_footprint
+    odom_topic: odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.01
+    min_theta_velocity_threshold: 0.1
+    failure_tolerance: 0.5
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.3
+      movement_time_allowance: 20.0
+
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.30
+      yaw_goal_tolerance: 6.28  # frontier goal: don't care about final yaw
+
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      min_vel_x: 0.05
+      max_vel_x: 0.10
+      max_vel_theta: 3.0
+      min_speed_xy: 0.05
+      max_speed_xy: 0.10
+      min_speed_theta: 1.0
+      acc_lim_x: 1.2
+      acc_lim_theta: 3.0
+      decel_lim_x: -1.5
+      decel_lim_theta: -3.0
+      vx_samples: 15
+      vtheta_samples: 20
+      sim_time: 1.5
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.3
+      xy_goal_tolerance: 0.30
+      trans_stopped_velocity: 0.03
+      short_circuit_trajectory_evaluation: true
+      stateful: true
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 3.5
+      RotateToGoal.lookahead_time: -1.0
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_footprint
+      use_sim_time: false
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      footprint: "[[-0.26, -0.178], [-0.26, 0.178], [0.26, 0.178], [0.26, -0.178]]"
+      plugins: ["obstacle_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        observation_persistence: 1.0
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.02
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.02
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.45
+      always_send_full_costmap: true
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_footprint
+      use_sim_time: false
+      footprint: "[[-0.26, -0.178], [-0.26, 0.178], [0.26, 0.178], [0.26, -0.178]]"
+      resolution: 0.05
+      rolling_window: false
+      width: 20
+      height: 20
+      origin_x: -10.0
+      origin_y: -10.0
+      track_unknown_space: true
+      # static_layer subscribes to slam_toolbox's live /map so EVERY occupied
+      # cell SLAM has ever mapped (the black wall/furniture pixels) becomes
+      # lethal in global_costmap. Without it, only the obstacle_layer's live
+      # LaserScan hits are marked, and the planner happily routes through
+      # walls it mapped earlier but can't currently see.
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+        subscribe_to_updates: true
+        map_topic: /map
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        observation_persistence: 1.0
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 10.0
+          raytrace_min_range: 0.02
+          obstacle_max_range: 9.5
+          obstacle_min_range: 0.02
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 4.0
+        inflation_radius: 0.45
+      always_send_full_costmap: true
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 10.0
+    use_sim_time: false
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      # tolerance=0 means goal must be exactly reachable in free space; planner
+      # rejects rather than falling back to "nearest cell within 0.5m" (which
+      # could be inside obstacle inflation).
+      tolerance: 0.0
+      use_astar: false
+      allow_unknown: true
+      # Reject any cell with internal cost >= 200 (default 253 = INSCRIBED).
+      # 200 ≈ OccupancyGrid value 78, so only DEEP inflation (close to
+      # obstacle inscribed circle, the dark purple zone in RViz GlobalCostmap)
+      # is impassable. Light inflation (lighter blue/pink outer halo) remains
+      # traversable so planner has flexibility in tight corridors.
+      lethal_cost_value: 200
+
+behavior_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    global_frame: odom
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.2
+    use_sim_time: false
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 2.0
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: false
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: false
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.10, 0.0, 3.0]
+    min_velocity: [-0.08, 0.0, -3.0]
+    max_accel: [1.2, 0.0, 3.0]
+    max_decel: [-1.5, 0.0, -3.0]
+    odom_topic: "odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.02, 0.0, 0.3]
+    velocity_timeout: 0.2

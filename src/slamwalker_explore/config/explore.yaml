@@ -1,0 +1,31 @@
+frontier_explorer:
+  ros__parameters:
+    # locomotion-aware utility weights
+    # baseline (explore_lite-style): alpha=1.0 beta=0.0 gamma=5.0
+    # our method:                    alpha=1.0 beta=2.5 gamma=5.0
+    alpha_distance: 0.5
+    beta_turn: 5.0
+    gamma_info: 8.0
+
+    robot_radius: 0.30
+    min_frontier_size: 5
+    min_info_gain: 120
+    info_gain_radius_m: 1.5
+
+    replan_period_s: 2.0
+    goal_timeout_s: 60.0
+    progress_min_m: 0.10
+    progress_window_s: 20.0
+
+    # preemptive goal switching (hysteresis against thrashing):
+    # while driving, switch to a re-scored candidate only if it's committed
+    # >= preempt_min_commit_s, its utility >= current * preempt_factor, and
+    # it's >= preempt_min_move_m from the current goal.
+    preempt_factor: 1.5
+    preempt_min_commit_s: 5.0
+    preempt_min_move_m: 0.5
+
+    max_failed_goals: 5
+    map_save_path: '/home/kris_nano/walker_ws/maps/auto_map'
+    map_frame: 'map'
+    robot_frame: 'base_footprint'

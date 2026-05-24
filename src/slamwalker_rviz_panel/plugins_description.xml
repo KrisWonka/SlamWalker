@@ -1,0 +1,7 @@
+<library path="slamwalker_rviz_panel">
+  <class name="slamwalker_rviz_panel/WalkerPanel"
+         type="slamwalker_rviz_panel::WalkerPanel"
+         base_class_type="rviz_common::Panel">
+    <description>SlamWalker control panel: orchestrate Phase 1 / Phase 2 sessions.</description>
+  </class>
+</library>
