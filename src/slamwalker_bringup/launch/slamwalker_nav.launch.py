@@ -31,6 +31,10 @@ def generate_launch_description():
         description='LDLiDAR product name')
     map_arg = DeclareLaunchArgument(
         'map', description='Full path to map yaml file')
+    use_rviz_arg = DeclareLaunchArgument(
+        'use_rviz', default_value='false',
+        description='Start rviz2 locally. Keep false on headless Jetson; '
+                    'view RViz remotely from krix-mac instead.')
 
     robot_description = Command(['xacro ', urdf_file])
 
@@ -50,16 +54,20 @@ def generate_launch_description():
             'port': LaunchConfiguration('serial_port'),
             'baud': 115200,
             'rate_hz': 20.0,
-            'wheel_base': 0.40,
-            'ticks_per_meter': 16400.0,
+            'wheel_base': 0.3913,
+            'ticks_per_meter': 15623.1,
+            'right_encoder_scale': 1.0,
             'base_frame': 'base_footprint',
         }],
         output='screen',
     )
 
-    scan_resampler = ExecuteProcess(
-        cmd=['python3', '/tmp/scan_resampler.py'],
-        output='screen',
+    # Use the installed package node, NOT /tmp/scan_resampler.py — /tmp is
+    # wiped on reboot, which silently kills /scan and leaves amcl with no
+    # laser → never localizes → no map->odom tf → whole nav2 stack stuck.
+    scan_resampler = Node(
+        package='slamwalker_explore', executable='scan_resampler',
+        name='scan_resampler', output='screen',
     )
     ldlidar = Node(
         package='ldlidar_ros2',
@@ -96,6 +104,7 @@ def generate_launch_description():
             }.items(),
         )]
 
+    from launch.conditions import IfCondition
     rviz2 = Node(
         package='rviz2',
         executable='rviz2',
@@ -103,6 +112,7 @@ def generate_launch_description():
         arguments=['-d', rviz_config],
         parameters=[{'use_sim_time': False}],
         output='screen',
+        condition=IfCondition(LaunchConfiguration('use_rviz')),
     )
 
     ld = LaunchDescription()
@@ -110,6 +120,7 @@ def generate_launch_description():
     ld.add_action(lidar_port_arg)
     ld.add_action(lidar_model_arg)
     ld.add_action(map_arg)
+    ld.add_action(use_rviz_arg)
     ld.add_action(robot_state_publisher)
     ld.add_action(serial_bridge)
     ld.add_action(ldlidar)
