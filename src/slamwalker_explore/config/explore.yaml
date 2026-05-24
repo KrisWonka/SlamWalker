@@ -8,6 +8,10 @@ frontier_explorer:
     gamma_info: 8.0
 
     robot_radius: 0.30
+    # Goal-clearance: candidate rejected only if occupied cell within this
+    # radius. Small (0.15) so cluttered chair-leg rooms still yield goals;
+    # robot_radius(0.3) was too strict → all candidates filtered → no goals.
+    goal_clearance_m: 0.15
     min_frontier_size: 5
     min_info_gain: 120
     info_gain_radius_m: 1.5

@@ -57,6 +57,11 @@ class FrontierExplorer(Node):
         self.declare_parameter('gamma_info', 5.0)
         # ---- geometry ----
         self.declare_parameter('robot_radius', 0.30)
+        # Goal-clearance radius: candidate rejected only if an occupied cell
+        # is within this distance. Use a small value (NOT robot_radius), or in
+        # cluttered chair-leg rooms every frontier centroid is within 0.3m of
+        # some leg and ALL candidates get filtered out → no goals at all.
+        self.declare_parameter('goal_clearance_m', 0.15)
         self.declare_parameter('min_frontier_size', 3)       # min cluster cells
         self.declare_parameter('min_info_gain', 80)          # min unknown cells around a frontier to be worth visiting
         self.declare_parameter('info_gain_radius_m', 1.0)    # unknown cells within this radius count as info gain
@@ -83,6 +88,7 @@ class FrontierExplorer(Node):
         self.beta = self.get_parameter('beta_turn').value
         self.gamma = self.get_parameter('gamma_info').value
         self.robot_radius = self.get_parameter('robot_radius').value
+        self.goal_clearance = self.get_parameter('goal_clearance_m').value
         self.min_frontier_size = int(self.get_parameter('min_frontier_size').value)
         self.min_info_gain = int(self.get_parameter('min_info_gain').value)
         self.info_radius = self.get_parameter('info_gain_radius_m').value
@@ -273,14 +279,21 @@ class FrontierExplorer(Node):
             cc = cs.mean()
             wx = ox + (cc + 0.5) * res
             wy = oy + (cr + 0.5) * res
-            # Keep only if centroid is free AND has robot_radius clearance
-            # from any obstacle. Without the clearance check, frontier picks
-            # goals right next to walls, which costmap inflation then turns
-            # into "unreachable in pure-free space" → planner fails.
             ri = int(round(cr))
             ci = int(round(cc))
-            if (0 <= ri < h and 0 <= ci < w and data[ri, ci] == FREE
-                    and self._has_obstacle_clearance(data, ri, ci, res)):
+            # A curved/L-shaped frontier cluster's centroid can land on an
+            # UNKNOWN or occupied cell even though every cluster cell is a free
+            # frontier cell. Snapping to the nearest actual cluster cell (always
+            # free) instead of rejecting — the old `data[ri,ci]==FREE` reject
+            # was silently killing ALL candidates in cluttered rooms ("no
+            # frontiers found" with 247 frontier cells still present).
+            if not (0 <= ri < h and 0 <= ci < w and data[ri, ci] == FREE):
+                best_cell = min(cells, key=lambda rc: (rc[0] - cr) ** 2 + (rc[1] - cc) ** 2)
+                ri, ci = int(best_cell[0]), int(best_cell[1])
+                wx = ox + (ci + 0.5) * res
+                wy = oy + (ri + 0.5) * res
+            # Reject only if too close to an obstacle (goal_clearance_m).
+            if self._has_obstacle_clearance(data, ri, ci, res):
                 candidates.append({
                     'x': wx, 'y': wy,
                     'cells': cells, 'size': len(cells),
@@ -289,8 +302,8 @@ class FrontierExplorer(Node):
         return candidates
 
     def _has_obstacle_clearance(self, data, row: int, col: int, res: float) -> bool:
-        """Reject frontier centroids whose robot-radius disk overlaps occupied cells."""
-        radius_cells = max(1, int(math.ceil(self.robot_radius / res)))
+        """Reject frontier centroids whose goal-clearance disk overlaps occupied cells."""
+        radius_cells = max(1, int(math.ceil(self.goal_clearance / res)))
         h, w = data.shape
         r0 = max(0, row - radius_cells)
         r1 = min(h, row + radius_cells + 1)

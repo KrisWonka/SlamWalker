@@ -158,19 +158,28 @@ planner_server:
     use_sim_time: false
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      # tolerance=0 means goal must be exactly reachable in free space; planner
-      # rejects rather than falling back to "nearest cell within 0.5m" (which
-      # could be inside obstacle inflation).
-      tolerance: 0.0
-      use_astar: false
+      # SmacPlanner2D (not NavfnPlanner): NavfnPlanner in ROS 2 exposes NO
+      # cost-weighting params (neutral/cost_factor/lethal are ROS1-only), so it
+      # always takes the shortest path — straight through chair legs. Smac2D
+      # exposes cost_travel_multiplier, the actual knob for "how painful is it
+      # to traverse high-cost cells", letting the planner detour via open space.
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.10                 # goal must be ~reachable; clutter goals fail (frontier re-picks) instead of routing through obstacle
       allow_unknown: true
-      # Reject any cell with internal cost >= 200 (default 253 = INSCRIBED).
-      # 200 ≈ OccupancyGrid value 78, so only DEEP inflation (close to
-      # obstacle inscribed circle, the dark purple zone in RViz GlobalCostmap)
-      # is impassable. Light inflation (lighter blue/pink outer halo) remains
-      # traversable so planner has flexibility in tight corridors.
-      lethal_cost_value: 200
+      downsample_costmap: false
+      downsampling_factor: 1
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0
+      # KEY: high multiplier makes squeezing through chair-leg inflation
+      # expensive, so Smac prefers the wider open aisle even if longer.
+      cost_travel_multiplier: 8.0
+      use_final_approach_orientation: false
+      smoother:
+        max_iterations: 500
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
 
 behavior_server:
   ros__parameters:
