@@ -12,6 +12,7 @@
   <depend>rviz_common</depend>
   <depend>rviz_default_plugins</depend>
   <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
   <depend>pluginlib</depend>
   <depend>qtbase5-dev</depend>
 

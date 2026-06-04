@@ -7,10 +7,12 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
+#include <QSlider>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/panel.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 namespace slamwalker_rviz_panel
 {
@@ -32,6 +34,7 @@ private Q_SLOTS:
   void onResetPose();
   void onBrowseMap();
   void onEmergencyStop();
+  void onSpeedChanged(int value);
 
 private:
   void callTrigger(const std::string & service_name, const std::string & friendly);
@@ -53,6 +56,9 @@ private:
   QPushButton * btn_estop_;
   QLineEdit * map_path_edit_;
   QLabel * status_;
+  QSlider * speed_slider_;
+  QLabel * speed_label_;
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr speed_pub_;
 };
 
 }  // namespace slamwalker_rviz_panel

@@ -20,6 +20,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped, Quaternion, Vector3
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Float64
 from tf2_ros import TransformBroadcaster
 import serial
 
@@ -91,6 +92,9 @@ class SerialBridgeNode(Node):
 
         self.create_subscription(Twist, 'cmd_vel', self._twist_cb, 10)
         self.create_subscription(Vector3, 'motor_scales', self._scales_cb, 10)
+        # Overall speed multiplier (0..1), set live from the RViz speed slider.
+        self.speed_scale = 0.5
+        self.create_subscription(Float64, '/walker/speed_scale', self._speed_scale_cb, 10)
         self.create_timer(1.0 / rate, self._send_cmd)
 
         self.odom_pub = self.create_publisher(Odometry, 'odom', 50)
@@ -144,6 +148,11 @@ class SerialBridgeNode(Node):
             f'Motor scales updated: L={self.left_scale:.2f} R={self.right_scale:.2f}',
             throttle_duration_sec=0.5)
 
+    def _speed_scale_cb(self, msg: Float64):
+        self.speed_scale = max(0.0, min(1.0, msg.data))
+        self.get_logger().info(
+            f'Speed scale set to {self.speed_scale:.2f}', throttle_duration_sec=0.5)
+
     def _send_cmd(self):
         with self._ser_lock:
             if self.ser is None:
@@ -156,6 +165,10 @@ class SerialBridgeNode(Node):
                 else:
                     lx = 0.0
                     az = 0.0
+
+            # Overall speed scale (RViz slider) — applied to both lin and ang.
+            lx *= self.speed_scale
+            az *= self.speed_scale
 
             if self.invert_angular:
                 az = -az

@@ -15,6 +15,7 @@ find_package(rclcpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 
@@ -33,6 +34,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rviz_common
   rviz_default_plugins
   std_srvs
+  std_msgs
   pluginlib)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
@@ -52,5 +54,5 @@ install(FILES plugins_description.xml
   DESTINATION share/${PROJECT_NAME})
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(rclcpp rviz_common rviz_default_plugins std_srvs pluginlib)
+ament_export_dependencies(rclcpp rviz_common rviz_default_plugins std_srvs std_msgs pluginlib)
 ament_package()

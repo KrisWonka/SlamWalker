@@ -5,6 +5,7 @@
 #include <QGroupBox>
 #include <QFileDialog>
 #include <QFont>
+#include <QSlider>
 
 #include <rviz_common/display_context.hpp>
 #include <rclcpp/parameter_client.hpp>
@@ -17,7 +18,8 @@ WalkerPanel::WalkerPanel(QWidget * parent)
 : rviz_common::Panel(parent),
   btn_start_(nullptr), btn_finish_(nullptr), btn_load_(nullptr),
   btn_reset_(nullptr), btn_browse_(nullptr), btn_estop_(nullptr),
-  map_path_edit_(nullptr), status_(nullptr)
+  map_path_edit_(nullptr), status_(nullptr),
+  speed_slider_(nullptr), speed_label_(nullptr)
 {
   auto layout = new QVBoxLayout;
 
@@ -60,6 +62,21 @@ WalkerPanel::WalkerPanel(QWidget * parent)
   phase2_box->setLayout(phase2_layout);
   layout->addWidget(phase2_box);
 
+  // Speed group: overall velocity scale (0-100%) published to /walker/speed_scale
+  auto speed_box = new QGroupBox("Speed (overall scale)");
+  auto speed_layout = new QVBoxLayout;
+  speed_label_ = new QLabel("Speed: 50%");
+  speed_label_->setAlignment(Qt::AlignCenter);
+  speed_slider_ = new QSlider(Qt::Horizontal);
+  speed_slider_->setRange(0, 100);
+  speed_slider_->setValue(50);
+  speed_slider_->setTickPosition(QSlider::TicksBelow);
+  speed_slider_->setTickInterval(10);
+  speed_layout->addWidget(speed_label_);
+  speed_layout->addWidget(speed_slider_);
+  speed_box->setLayout(speed_layout);
+  layout->addWidget(speed_box);
+
   status_ = new QLabel("status: idle");
   status_->setWordWrap(true);
   status_->setStyleSheet("QLabel { color: gray; }");
@@ -74,6 +91,7 @@ WalkerPanel::WalkerPanel(QWidget * parent)
   connect(btn_reset_, &QPushButton::clicked, this, &WalkerPanel::onResetPose);
   connect(btn_browse_, &QPushButton::clicked, this, &WalkerPanel::onBrowseMap);
   connect(btn_estop_, &QPushButton::clicked, this, &WalkerPanel::onEmergencyStop);
+  connect(speed_slider_, &QSlider::valueChanged, this, &WalkerPanel::onSpeedChanged);
 }
 
 WalkerPanel::~WalkerPanel() = default;
@@ -90,6 +108,14 @@ void WalkerPanel::onInitialize()
 
   session_param_client_ = std::make_shared<rclcpp::AsyncParametersClient>(
     node_, "/session_manager");
+
+  speed_pub_ = node_->create_publisher<std_msgs::msg::Float64>("/walker/speed_scale", 10);
+  // publish the initial slider value so the bridge starts in sync
+  {
+    std_msgs::msg::Float64 m;
+    m.data = speed_slider_->value() / 100.0;
+    speed_pub_->publish(m);
+  }
 
   setStatus("ready", true);
 }
@@ -162,6 +188,16 @@ void WalkerPanel::onBrowseMap()
     this, "Select map YAML", map_path_edit_->text(), "Map files (*.yaml)");
   if (!fn.isEmpty()) {
     map_path_edit_->setText(fn);
+  }
+}
+
+void WalkerPanel::onSpeedChanged(int value)
+{
+  speed_label_->setText(QString("Speed: %1%").arg(value));
+  if (speed_pub_) {
+    std_msgs::msg::Float64 m;
+    m.data = value / 100.0;
+    speed_pub_->publish(m);
   }
 }
 
