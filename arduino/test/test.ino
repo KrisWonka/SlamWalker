@@ -28,7 +28,7 @@ const int RIGHT_DIR = 12;
 // ------------------- Robot Parameters -----------------------
 const float WHEEL_BASE    = 0.3634;   // effective track width for walking mechanism (m)
 const float MAX_SPEED     = 0.10;   // walking mechanism needs high PWM; lower = more torque
-const int   PWM_MIN_MOVE  = 230;    // walking mechanism needs near-full power to overcome friction
+const int   PWM_MIN_MOVE  = 120;    // walking mechanism needs near-full power to overcome friction
 
 const float GEAR_RATIO    = 70.0;   // Pololu 37D 70:1 (#4754)
 const float COUNTS_PER_WHEEL_REV = 32.0 * GEAR_RATIO;
@@ -36,7 +36,7 @@ const float COUNTS_PER_WHEEL_REV = 32.0 * GEAR_RATIO;
 // Per-motor PWM bias: absolute offset subtracted from each side's PWM.
 // Used because mechanical L/R imbalance is roughly a fixed PWM gap, not a ratio —
 // a ratio scales turn commands too, starving the inner wheel of torque.
-const int LEFT_PWM_BIAS  = 11;
+const int LEFT_PWM_BIAS  = 18;
 const int RIGHT_PWM_BIAS = -10;  // MD10 swap: bumped right up to balance left-fast asymmetry
 
 // ------------------- Smoothing --------------------------------

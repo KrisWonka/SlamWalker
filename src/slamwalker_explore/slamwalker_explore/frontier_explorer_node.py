@@ -62,6 +62,13 @@ class FrontierExplorer(Node):
         # cluttered chair-leg rooms every frontier centroid is within 0.3m of
         # some leg and ALL candidates get filtered out → no goals at all.
         self.declare_parameter('goal_clearance_m', 0.15)
+        # Reject frontier goals whose Nav2 global-costmap cost exceeds this
+        # (0=free .. ~99=inscribed, 100=lethal, -1=unknown). Keeps goals out of
+        # the inflation layer / off obstacles. The goal is also snapped to the
+        # lowest-cost cell of its frontier cluster. If EVERY candidate exceeds
+        # it, the least-inflated one is used as a fallback so exploration does
+        # not stall in tight rooms.
+        self.declare_parameter('goal_max_costmap_cost', 50)
         self.declare_parameter('min_frontier_size', 3)       # min cluster cells
         self.declare_parameter('min_info_gain', 80)          # min unknown cells around a frontier to be worth visiting
         self.declare_parameter('info_gain_radius_m', 1.0)    # unknown cells within this radius count as info gain
@@ -89,6 +96,7 @@ class FrontierExplorer(Node):
         self.gamma = self.get_parameter('gamma_info').value
         self.robot_radius = self.get_parameter('robot_radius').value
         self.goal_clearance = self.get_parameter('goal_clearance_m').value
+        self.goal_max_cmcost = int(self.get_parameter('goal_max_costmap_cost').value)
         self.min_frontier_size = int(self.get_parameter('min_frontier_size').value)
         self.min_info_gain = int(self.get_parameter('min_info_gain').value)
         self.info_radius = self.get_parameter('info_gain_radius_m').value
@@ -130,6 +138,11 @@ class FrontierExplorer(Node):
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
         self.create_subscription(OccupancyGrid, '/map', self._map_cb, map_qos)
+        # Nav2 global costmap (static map + obstacle + inflation): used to keep
+        # frontier goals out of the inflation layer / off obstacles.
+        self.latest_costmap = None
+        self.create_subscription(
+            OccupancyGrid, '/global_costmap/costmap', self._costmap_cb, map_qos)
         self.marker_pub = self.create_publisher(MarkerArray, '/frontiers', 1)
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
@@ -142,6 +155,10 @@ class FrontierExplorer(Node):
     def _map_cb(self, msg: OccupancyGrid):
         with self.map_lock:
             self.latest_map = msg
+
+    def _costmap_cb(self, msg: OccupancyGrid):
+        with self.map_lock:
+            self.latest_costmap = msg
 
     # ------------------------------ main tick -----------------------------
 
@@ -232,6 +249,19 @@ class FrontierExplorer(Node):
         h = grid.info.height
         data = np.asarray(grid.data, dtype=np.int8).reshape((h, w))
 
+        # Nav2 global costmap (None until Nav2 publishes it) — used to snap each
+        # goal to the safest cell of its frontier and to flag inflation goals.
+        with self.map_lock:
+            cm = self.latest_costmap
+        cm_data = cm_res = cm_ox = cm_oy = cm_h = cm_w = None
+        if cm is not None:
+            cm_data = np.asarray(cm.data, dtype=np.int16).reshape(
+                (cm.info.height, cm.info.width))
+            cm_res = cm.info.resolution
+            cm_ox = cm.info.origin.position.x
+            cm_oy = cm.info.origin.position.y
+            cm_h, cm_w = cm_data.shape
+
         # frontier cell = FREE that has at least one UNKNOWN 4-neighbor
         free = data == FREE
         unknown = data == UNKNOWN
@@ -294,10 +324,32 @@ class FrontierExplorer(Node):
                 wy = oy + (ri + 0.5) * res
             # Reject only if too close to an obstacle (goal_clearance_m).
             if self._has_obstacle_clearance(data, ri, ci, res):
+                # Snap the goal to the lowest global-costmap-cost cell of this
+                # frontier cluster (keeps it on the frontier, at its safest
+                # point). cmcost records that cost so unsafe goals (inflation /
+                # obstacle) can be rejected at selection time.
+                cmcost = None
+                if cm_data is not None:
+                    best_cost = 10 ** 9
+                    for (rr2, cc2) in cells:
+                        wx2 = ox + (cc2 + 0.5) * res
+                        wy2 = oy + (rr2 + 0.5) * res
+                        cci = int((wx2 - cm_ox) / cm_res)
+                        cri = int((wy2 - cm_oy) / cm_res)
+                        if not (0 <= cri < cm_h and 0 <= cci < cm_w):
+                            continue
+                        cval = int(cm_data[cri, cci])
+                        if cval < 0:          # unknown → rank as free
+                            cval = 0
+                        if cval < best_cost:
+                            best_cost = cval
+                            ri, ci, wx, wy = rr2, cc2, wx2, wy2
+                    if best_cost < 10 ** 9:
+                        cmcost = best_cost
                 candidates.append({
                     'x': wx, 'y': wy,
                     'cells': cells, 'size': len(cells),
-                    'row': ri, 'col': ci,
+                    'row': ri, 'col': ci, 'cmcost': cmcost,
                 })
         return candidates
 
@@ -352,6 +404,23 @@ class FrontierExplorer(Node):
                            'target_yaw': target_yaw})
 
         scored.sort(key=lambda s: s['U'], reverse=True)
+
+        # Keep goals out of the inflation layer / off obstacles: prefer
+        # candidates whose snapped goal has acceptable global-costmap cost.
+        # (cmcost is None when the costmap isn't available yet → treated safe.)
+        safe = [s for s in scored
+                if s.get('cmcost') is None or s['cmcost'] <= self.goal_max_cmcost]
+        if safe:
+            return safe
+        # Nothing safe (tight/cluttered room) — fall back to the least-inflated
+        # candidate so exploration doesn't stall, but warn loudly.
+        if scored:
+            scored.sort(key=lambda s: (s.get('cmcost')
+                                       if s.get('cmcost') is not None else 0))
+            self.get_logger().warn(
+                'All frontier goals fall in inflation/obstacle; using '
+                f'least-cost fallback (cmcost={scored[0].get("cmcost")}).',
+                throttle_duration_sec=5.0)
         return scored
 
     @staticmethod
