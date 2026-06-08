@@ -5,16 +5,16 @@ SlamWalker locomotion-aware frontier explorer (Phase 1).
 Pipeline (lane 3 of phase1_autonomous_exploration_clean.png):
   /map (slam_toolbox) ---> extract frontier cells
                        --> cluster into candidate goals
-                       --> score with U = alpha*distance + beta*turn + gamma*info_gain
+                       --> score with U = gamma*info_gain - alpha*distance - beta*turn
                        --> send NavigateToPose action to Nav2
                        --> repeat until no reachable frontier
                        --> save auto_map.yaml (Phase 2 input)
 
 The "beta*turn" term is the locomotion-aware contribution: the walking
 mechanism pays a disproportionate cost for in-place rotation compared to
-a differential-wheeled base (ticks_per_meter is 2.14x the wheel-radius
-prediction; PWM dead-zone is 230/255). The classical Yamauchi 1997 /
-explore_lite utility uses only distance and info gain.
+a differential-wheeled base (calibrated ticks_per_meter 15623.1 is ~1.57x
+the wheel-radius prediction ~9973; PWM dead-zone is 120/255). The classical
+Yamauchi 1997 / explore_lite utility uses only distance and info gain.
 
 Set beta=0 to recover an explore_lite-style baseline for ablation.
 """
